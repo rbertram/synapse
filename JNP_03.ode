@@ -1,0 +1,101 @@
+% JNP_03.ode
+
+% This code is from "A Minimal Model for G Protein-Mediated Synaptic Facilitation and Depression"
+% by R. Bertram, J. Swanson, M. Yousef, Z.-P. Feng, and G. W. Zamponi,
+% J. Neurophysiol., 90:1643-1653, 2003.
+
+% A minimal G protein model. Has V-dependent relief of inhibition, and
+% acts as a high-pass filter. Assumes constant level of G proteins.
+% HH Na current has been simplified by using the quasi-equilibrium assumption
+% for activation and (1-n) in place of h (see ref. 1191).
+
+# xpp parameters
+@ meth=cvode, atolar=1e-10, tolar=1e-10, dt=0.1, total=900, maxstor=10000,
+@ bounds=10000000000
+@ xp=t, yp=vp
+@ xlo=0, xhi=900, ylo=-70, yhi=40
+
+# For voltage clamp set autovp=0.
+
+# Initial Conditions
+# w=fraction of willing Ca channels.
+# v=presynaptic voltage.
+# vp=postsynaptic voltage.
+# s=fraction of bound postsynaptic receptors.
+
+init v=-65
+init n=0.3
+init w=0
+init vp=-65
+init np=0.3
+init s=0
+
+# Enter max number of pulses.
+params pulsenum=200
+
+# For voltage clamp set autovp=0.
+params autovp=1,vclamp=-30
+
+# G protein binding and unbinding rates.
+# Default: Gb3 - b1
+
+params kp=0.004,kmbar=0.22
+
+% voltage parameters
+
+params freq=20
+number tf=5,tp=1,q10=1,gk=36,gna=120,vl=-55
+number cm=1,gl=0.3,vna=40,vk=-77 
+
+% Stimulus Parameters
+
+params pulseiap=10
+number offperiod=60, tstart=60
+
+% Postsynaptic parameters
+params gsyn=0.3,vsyn=0
+number kdmax=50,taus=1
+ 
+period = 1000/freq
+
+% G protein binding/unbinding rates
+km = kmbar/(1+exp(-v/5))
+
+% bound postsynaptic receptors.
+kd = kdmax*(1-w)
+sinf = 1/(1+exp(-(v-kd)/5))
+
+% Multiply rates by 2 for shorter APs. Also apply q10 scaling.
+alphax = q10*2*0.1*(v+40)/(1-exp(-(v+40)/10))
+betax = q10*2*4*exp(-(v+65)/18)
+alphan = q10*2*0.01*(v+55)/(1-exp(-(v+55)/10))
+betan = q10*2*0.125*exp(-(v+65)/80)
+onperiod = period*pulsenum
+ts=t-tstart
+iaptmp = pulseiap*(heav(mod(ts,period)-tf)-heav(mod(ts,period)-(tf+tp)))
+iap = iaptmp*(heav(onperiod-ts)+heav(ts-(onperiod+offperiod-10))-heav(ts-(2*onperiod+offperiod-10)))
+
+% Postsynaptic currents
+alphaxp = q10*2*0.1*(vp+40)/(1-exp(-(vp+40)/10))
+betaxp = q10*2*4*exp(-(vp+65)/18)
+alphanp = q10*2*0.01*(vp+55)/(1-exp(-(vp+55)/10))
+betanp = q10*2*0.125*exp(-(vp+65)/80)
+isyn=gsyn*s*(vp-vsyn)
+
+% quasi-equilibrium assumption for HH Na current activation
+xinf=alphax/(alphax+betax)
+xinfp=alphaxp/(alphaxp+betaxp)
+
+% Differential Equations
+v' = -(gna*(xinf**3)*(1-n)*(v-vna)+gk*(n**4)*(v-vk)+gl*(v-vl)-iap)/cm
+n' = alphan*(1-n)-betan*n
+w' = km*(1-w) - kp*w
+vp' = autovp*(-(gna*(xinfp**3)*(1-np)*(vp-vna)+gk*(np**4)*(vp-vk)+gl*(vp-vl)+isyn)/cm) + (1-autovp)*(vclamp-vp)
+np' = alphanp*(1-np)-betanp*np
+s' = (sinf-s)/taus
+
+% Output
+aux Iap=iap
+aux winf=km/(km+kp)
+aux tsec=t/1000
+done

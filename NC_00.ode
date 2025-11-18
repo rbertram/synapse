@@ -1,0 +1,158 @@
+# NC_00.ode
+#
+# This XPP file simulates the effects of synaptic depression and/or G protein
+# inhibition during a train of action potentials. Used to make figures in
+# "Differential Filtering of Two Presynaptic Depression Mechanisms" by R. Bertram,
+# Neural Computation, 13:69-85, 2000.
+
+
+# xpp parameters
+@ meth=backeul, atolar=1e-10, tolar=1e-10, dt=0.1, total=235, maxstor=10000,
+@ bounds=10000000000
+@ xp=t, yp=Vp
+@ xlo=0, xhi=150, ylo=-80, yhi=0
+
+# For voltage clamp set autovp=0.
+
+# Initial Conditions
+# b=fraction of bound postsynaptic receptors.
+# a=fraction of activated G-proteins.
+# d=depletion fraction.
+# v=presynaptic voltage.
+# vp=postsynaptic voltage.
+
+v(0)=-65
+x(0)=0.05
+h(0)=0.60
+n(0)=0.3
+s1(0)=0
+c2(0)=0
+c3(0)=0
+c4(0)=0
+m(0)=0
+d(0)=0.0
+cg1(0)=0
+cg2(0)=0
+cg3(0)=0
+a(0)=0
+b(0)=0
+vp(0)=-65
+xp(0)=0.05
+hp(0)=0.60
+np(0)=0.3
+
+# Enter max number of pulses.
+params pulsenum=40
+
+# For voltage clamp set autovp=0.
+params autovp=1,vclamp=-30
+
+# Binding and Unbinding Parameters to Release Site.
+
+number krp=0.015,krm=2.5
+
+% voltage parameters
+
+params freq=70
+number tf=5,tp=1,gna=120,gk=36
+number cm=1,gl=0.3,vna=50,vk=-77,vl=-54 
+
+% Stimulus Parameters (G=1 means agonist released, G=0 otherwise):
+
+params G=1
+number pulseiap=30, offperiod=60, tstart=60
+
+% Depletion parameters (Dep=1 means depletion occurs, Dep=0 otherwise):
+params kdp=0.5, kdm=0.025, Dep=1
+
+% Transmitter concentration parameters (from Dittman and Regehr):
+params kap=0.2, kam=0.0015
+params tbar=2
+
+% Calcium channel/ domain ca parameters:
+% Distance is in micrometers
+number dist=0.01, l=0.00025, cabk=0.1
+number gcahat=12.0, p=6, cao=2.0, 
+
+% Postsynaptic parameters
+params kbp=2,kbm=1,gsyn=0.3,vsyn=0
+ 
+% Invisible parameters
+% rtdf = RT/F=26.7 at 37 deg C (310K) in mV
+% rtdf = RT/F=25.4 at 22 deg C (310K) in mV
+rtdf=26.7 
+dc=220.0
+
+% Expressions
+period = 1000/freq
+alpha = .9*exp(v/22)
+beta = .03*(exp(-v/14))
+alphag = (1/8)*alpha
+betag = 8*beta
+
+% Sigmoidal relation
+k = 0.3*a/(68 + 32*a)
+s0 = 1 - s1 
+GHK = gcahat*p*cao*2*v/(rtdf*(1 - exp(2*v/rtdf)))
+sigma = -5.182*GHK
+ca = sigma/(2*pi*dc*dist)    
+avca = ca*m + cabk
+c1=1-c2-c3-c4-m-cg1-cg2-cg3   
+
+% Multiply rates by 2 for shorter APs. 
+alphax = 2*0.1*(v+40)/(1-exp(-(v+40)/10))
+betax = 2*4*exp(-(v+65)/18)
+alphah = 2*0.07*exp(-(v+65)/20)
+betah = 2*1/(1+exp(-(v+35)/10))
+alphan = 2*0.01*(v+55)/(1-exp(-(v+55)/10))
+betan = 2*0.125*exp(-(v+65)/80)
+onperiod = period*pulsenum
+ts=t-tstart
+iaptmp = pulseiap*(heav(mod(ts,period)-tf)-heav(mod(ts,period)-(tf+tp)))
+iap = iaptmp*(heav(onperiod-ts)+heav(ts-(onperiod+offperiod-10))-heav(ts-(2*onperiod+offperiod-10)))
+
+% Convert release probability to transmitter concentration:
+trans = tbar*(1-d)*s1
+
+% Postsynaptic currents
+alphaxp = 2*0.1*(vp+40)/(1-exp(-(vp+40)/10))
+betaxp = 2*4*exp(-(vp+65)/18)
+alphahp = 2*0.07*exp(-(vp+65)/20)
+betahp = 2*1/(1+exp(-(vp+35)/10))
+alphanp = 2*0.01*(vp+55)/(1-exp(-(vp+55)/10))
+betanp = 2*0.125*exp(-(vp+65)/80)
+isyn=gsyn*b*(vp-vsyn)
+
+% Differential Equations
+v' = -(gna*(x^3)*h*(v-vna)+gk*(n^4)*(v-vk)+gl*(v-vl)-iap)/cm
+x' = alphax*(1-x)-betax*x
+h' = alphah*(1-h)-betah*h
+n' = alphan*(1-n)-betan*n
+s1' = krp*avca*s0 - s1*krm
+c2' = 4*alpha*c1 + 2*beta*c3 + 64*l*cg2 - beta*c2 -3*alpha*c2 - k*c2
+c3' = 3*alpha*c2 + 3*beta*c4 + (64^2)*l*cg3 - 2*beta*c3 - 2*alpha*c3 - k*c3
+c4' = 2*alpha*c3 + 4*beta*m - 3*beta*c4 - alpha*c4 
+m' = alpha*c4 - 4*beta*m 
+cg1' = betag*cg2 + k*c1 - cg1*4*alphag - cg1*l
+cg2' = 4*alphag*cg1 + 2*betag*cg3 + k*c2 - cg2*betag - cg2*3*alphag - 64*l*cg2
+cg3'=3*alphag*cg2+ k*c3 - 2*betag*cg3 -(64^2)*l*cg3
+a' = G*(kap*trans*(1-a) - kam*a)
+b' = kbp*trans*(1-b) - kbm*b
+d' = Dep*(kdp*trans*(1-d) - kdm*d)
+vp' = autovp*(-(gna*(xp^3)*hp*(vp-vna)+gk*(np^4)*(vp-vk)+gl*(vp-vl)+isyn)/cm) + (1-autovp)*(vclamp-vp)
+xp' = alphaxp*(1-xp)-betaxp*xp
+hp' = alphahp*(1-hp)-betahp*hp
+np' = alphanp*(1-np)-betanp*np
+
+% Output
+% aux iapout=iap
+% aux avcaout = avca
+% aux s0out = s0
+aux release = s1
+aux Trans = trans
+aux cg = cg1+cg2+cg3
+aux Isyn = -isyn
+% aux GHKout=GHK
+% aux conserv = c1+c2+c3+c4+m+cg1+cg2+cg3
+% aux c1out = c1
+done
